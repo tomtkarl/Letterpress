@@ -55,7 +55,7 @@ _template_re = re.compile(r'{{([^{}]+)}}')
 
 
 def format(template, **kwargs):
-    return _template_re.sub(lambda m: kwargs[m.group(1)], template)
+    return _template_re.sub(lambda m: kwargs[m.group(1)] if m.group(1) in kwargs else '{{'+m.group(1)+'}}', template)
 
 pygments_options = {'cssclass': 'code', 'classprefix': 'code-'}
 
@@ -118,13 +118,23 @@ class Post(object):
         with codecs.open(os.path.join(templates_dir, template_file_name), 'r', 'utf-8') as f:
             template = f.read()
         content = markdown2.markdown(rest_text, extras={'code-friendly': True, 'fenced-code-blocks': pygments_options, 'footnotes': True, 'math_delimiter': math_delimiter if is_math else None})
-        # Process <code lang="programming-lang"></code> blocks or spans.
+        # Process <code lang = "programming-lang"></code> blocks or spans.
         content = self._format_code_lang(content)
-        self.html = format(template, title=self.title, date=self.date.strftime('%Y-%m-%d'), monthly_archive_url=os.path.dirname(self.permalink) + '/', year=self.date.strftime('%Y'), month=self.date.strftime('%B'), day=self.date.strftime('%d'), tags=', '.join('<a href="/tags/{tag}">{tag}</a>'.format(tag=tag) for tag in self.tags), permalink=self.permalink, excerpt=self.excerpt, content=content)
+        self.html = format(template, title=self.title
+                         , date=self.date.strftime('%Y-%m-%d')
+                         , monthly_archive_url=os.path.dirname(self.permalink) + '/'
+                         , year=self.date.strftime('%Y')
+                         , month=self.date.strftime('%B')
+                         , day=self.date.strftime('%d')
+                         , tags=', '.join('<a href="/tags/{tag}">{tag}</a>'.format(tag=tag) for tag in self.tags)
+                         , permalink=self.permalink
+                         , excerpt=self.excerpt
+                         , content=content)
+        self.html = format(self.html, **config)
         # Load MathJax for post with math tag.
         if is_math:
             self.html = self.html.replace('</head>', '''
-<script type="text/x-mathjax-config">
+<script type = "text/x-mathjax-config">
 MathJax.Hub.Config({
   asciimath2jax: {
     delimiters: [['%s','%s']]
@@ -155,7 +165,7 @@ MathJax.Hub.Config({
     _code_span_re = re.compile(r"""
         <code               # start tag
         \s+                 # word break
-        lang=(['"])(\w+)\1  # lang \2
+        lang = (['"])(\w+)\1  # lang \2
         \s*?>               # closing tag
         (.*?)               # code, minimally matching \3
         </code>             # the matching end tag
@@ -221,11 +231,17 @@ class Tag(object):
         post_template = posts_match.group(1)
         header_template = template[:posts_match.start()]
         header = format(header_template, archive_title=self.name)
+        header = format(header, **config)
         post_list = []
         for post in sorted(self.posts, reverse=True):
             if not post:
                 break
-            post_list.append(format(post_template, title=post.title, date=post.date.strftime('%Y-%m-%d'), pretty_date=post.pretty_date, permalink=post.permalink, excerpt=post.excerpt))
+            post_list.append(format(post_template
+                                  , title=post.title
+                                  , date=post.date.strftime('%Y-%m-%d')
+                                  , pretty_date=post.pretty_date
+                                  , permalink=post.permalink
+                                  , excerpt=post.excerpt))
         index = header + ''.join(post_list) + template[posts_match.end():]
         return index
 
@@ -270,11 +286,24 @@ class MonthlyArchive(object):
         if next_archive:
             next_archive_title = '>'
             next_archive_url = next_archive.permalink
-        header = format(header_template, archive_title=self.month.strftime('%B, %Y'), prev_archive_title=prev_archive_title, prev_archive_url=prev_archive_url, next_archive_title=next_archive_title, next_archive_url=next_archive_url, month=self.month.strftime('%B'), year=self.month.strftime('%Y'), yearly_archive_url=os.path.dirname(self.permalink[:-1]) + '/')
+        header = format(header_template
+                      , archive_title=self.month.strftime('%B, %Y')
+                      , prev_archive_title=prev_archive_title
+                      , prev_archive_url=prev_archive_url
+                      , next_archive_title=next_archive_title
+                      , next_archive_url=next_archive_url
+                      , month=self.month.strftime('%B')
+                      , year=self.month.strftime('%Y')
+                      , yearly_archive_url=os.path.dirname(self.permalink[:-1]) + '/')
         post_template = posts_match.group(1)
         post_list = []
         for post in self.posts:
-            post_list.append(format(post_template, title=post.title, date=post.date.strftime('%Y-%m-%d'), pretty_date=post.pretty_date, permalink=post.permalink, excerpt=post.excerpt))
+            post_list.append(format(post_template
+                                  , title=post.title
+                                  , date=post.date.strftime('%Y-%m-%d')
+                                  , pretty_date=post.pretty_date
+                                  , permalink=post.permalink
+                                  , excerpt=post.excerpt))
         index = header + ''.join(post_list) + template[posts_match.end():]
         return index
 
@@ -319,7 +348,12 @@ class YearlyArchive(object):
         if next_archive:
             next_archive_title = '>'
             next_archive_url = next_archive.permalink
-        header = format(header_template, archive_title=self.year.strftime('%Y'), prev_archive_title=prev_archive_title, prev_archive_url=prev_archive_url, next_archive_title=next_archive_title, next_archive_url=next_archive_url)
+        header = format(header_template
+                      , archive_title=self.year.strftime('%Y')
+                      , prev_archive_title=prev_archive_title
+                      , prev_archive_url=prev_archive_url
+                      , next_archive_title=next_archive_title
+                      , next_archive_url=next_archive_url)
         monthly_archive_template = monthly_archives_match.group(1)
         posts_match = _posts_re.search(monthly_archive_template)
         monthly_archive_header = monthly_archive_template[:posts_match.start()]
@@ -329,8 +363,16 @@ class YearlyArchive(object):
         for monthly_archive in self.monthly_archives:
             post_list = []
             for post in monthly_archive.posts:
-                post_list.append(format(post_template, title=post.title, date=post.date.strftime('%Y-%m-%d'), pretty_date=post.pretty_date, permalink=post.permalink, excerpt=post.excerpt))
-            monthly_archive_list.append(format(monthly_archive_header, monthly_archive_title=monthly_archive.month.strftime('%B'), monthly_archive_url=monthly_archive.permalink) + ''.join(post_list) + monthly_archive_footer)
+                post_list.append(format(post_template
+                                      , title = post.title
+                                      , date=post.date.strftime('%Y-%m-%d')
+                                      , pretty_date=post.pretty_date
+                                      , permalink=post.permalink
+                                      , excerpt=post.excerpt))
+            monthly_archive_list.append(format(monthly_archive_header
+                                             , monthly_archive_title=monthly_archive.month.strftime('%B')
+                                             , monthly_archive_url=monthly_archive.permalink)
+                                        + ''.join(post_list) + monthly_archive_footer)
         index = header + ''.join(monthly_archive_list) + template[monthly_archives_match.end():]
         return index
 
@@ -376,14 +418,24 @@ class TimelineArchive(object):
         if next_archive:
             next_archive_title = '>'
             next_archive_url = next_archive.permalink
-        footer = format(footer_template, prev_archive_title=prev_archive_title, prev_archive_url=prev_archive_url, next_archive_title=next_archive_title, next_archive_url=next_archive_url)
+        footer = format(footer_template
+                      , prev_archive_title=prev_archive_title
+                      , prev_archive_url=prev_archive_url
+                      , next_archive_title=next_archive_title
+                      , next_archive_url=next_archive_url)
+        footer = format(footer, **config)
         post_template = posts_match.group(1)
         post_list = []
         for post in self.posts:
             if not post:
                 break
-            post_list.append(format(post_template, title=post.title, date=post.date.strftime('%Y-%m-%d'), pretty_date=post.pretty_date, permalink=post.permalink, excerpt=post.excerpt))
-        index = template[:posts_match.start()] + ''.join(post_list) + footer
+            post_list.append(format(post_template
+                                  , title=post.title
+                                  , date=post.date.strftime('%Y-%m-%d')
+                                  , pretty_date=post.pretty_date
+                                  , permalink=post.permalink
+                                  , excerpt=post.excerpt))
+        index = format(template[:posts_match.start()], **config) + ''.join(post_list) + footer
         return index
 
     def __str__(self):
@@ -437,6 +489,7 @@ timeline_archives = []
 monthly_archives = {}
 yearly_archives = {}
 tags = {}
+config = {}
 
 
 def main():
@@ -484,7 +537,7 @@ def main():
     logger.addHandler(file_handler)
 
     # Letterpress config file parsing.
-    config = {'markdown_ext': '.md'}
+    config['markdown_ext'] =  '.md'
     with codecs.open(os.path.join(published_dir, 'letterpress.config'), 'r', 'utf-8') as config_file:
         for line in config_file.readlines():
             line = line.strip()
@@ -549,8 +602,11 @@ def main():
         tag_list = []
         for tag in sorted(tags.values()):
             post_count = len(tag.posts)
-            tag_list.append(format(tags_template, tag_title=tag.name, tag_url=tag.permalink, tag_size=str(len(tag.posts)) + ' ' + ('Articles' if post_count > 1 else 'Article')))
-        index = template[:tags_match.start()] + ''.join(tag_list) + template[tags_match.end():]
+            tag_list.append(format(tags_template
+                                 , tag_title=tag.name
+                                 , tag_url=tag.permalink
+                                 , tag_size=str(len(tag.posts)) + ' ' + ('Articles' if post_count > 1 else 'Article')))
+        index = format(template[:tags_match.start()], **config) + ''.join(tag_list) + template[tags_match.end():]
         output_dir = os.path.join(site_dir, 'tags')
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -672,8 +728,15 @@ def main():
         for monthly_archive in sorted(monthly_archives.values(), reverse=True):
             post_list = []
             for post in reversed(monthly_archive.posts):
-                post_list.append(format(post_template, title=post.title, date=post.date.strftime('%Y-%m-%d'), pretty_date=post.pretty_date, permalink=post.permalink, excerpt=post.excerpt))
-            monthly_archive_list.append(format(monthly_archive_header, monthly_archive_title=monthly_archive.month.strftime('%B, %Y'), monthly_archive_url=monthly_archive.permalink) + ''.join(post_list) + monthly_archive_footer)
+                post_list.append(format(post_template
+                                      , title=post.title
+                                      , date=post.date.strftime('%Y-%m-%d')
+                                      , pretty_date=post.pretty_date
+                                      , permalink=post.permalink
+                                      , excerpt=post.excerpt))
+            monthly_archive_list.append(format(monthly_archive_header
+                                             , monthly_archive_title=monthly_archive.month.strftime('%B, %Y')
+                                             , monthly_archive_url=monthly_archive.permalink) + ''.join(post_list) + monthly_archive_footer)
         index = template[:monthly_archives_match.start()] + ''.join(monthly_archive_list) + template[monthly_archives_match.end():]
         output_dir = os.path.join(site_dir, 'archive')
         if not os.path.exists(output_dir):
